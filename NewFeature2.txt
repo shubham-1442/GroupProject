@@ -1,0 +1,64 @@
+// new feature 2
+
+package com.oracle.service;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import com.oracle.dao.CustomerDao;
+import com.oracle.kafka.PublishEmailNotification;
+import com.oracle.model.Customer;
+import com.oracle.proxy.AccountServiceProxy;
+
+import jakarta.transaction.Transactional;
+@Service
+public class CustomerServiceImpl implements CustomerService {
+	@Autowired
+	private CustomerDao customerDao;
+	
+	@Autowired
+	private AccountServiceProxy accountServiceProxy;
+	
+	@Autowired
+	private PublishEmailNotification notification;
+	
+	public CustomerServiceImpl() {
+	}
+	
+	@Override
+	public Customer getCustomerById(String customerId) {
+		Customer customer = customerDao.findById(customerId).orElse(null);
+		if (customer != null) {
+			// call account microservice to get account details
+			
+			return customer;
+		}
+		throw new RuntimeException("Customer not found with ID: " + customerId);
+	}
+
+	@Override
+	@Transactional
+	public Customer addCustomer(Customer customer) {
+		if (customer != null) {
+			customer = customerDao.save(customer);
+			customer.getAccount().setCustomerId(customer.getCustomerId());
+			accountServiceProxy.addAccount(customer.getAccount());
+/*
+			String emailMessage = "";
+			emailMessage += "Dear " + customer.getFirstName() + ",\n";
+			emailMessage += "Your account has been successfully created.\n ";
+			emailMessage += "Your details are as follows:\n ";
+			emailMessage += "Customer ID: " + customer.getCustomerId() + "\n";
+			emailMessage += "Account number: " + customer.getAccount().getAccountId() + "\n";
+			emailMessage += "Regards,\n";
+			emailMessage += "Customer Service Team";
+			*/
+			notification.sendEmailNotification(customer);
+			
+			return customer;
+		} else {
+			throw new RuntimeException("Customer cannot be null");
+		}
+	}
+
+}
